@@ -26,7 +26,7 @@ void ev_loop_init(ev_loop_t *ev);
  * ev_base : 基本事件.
  *
  * active : 事件是否使能;
- * pending : 事件是否就绪;
+ * pended : 事件是否就绪;
  * priority : 事件优先级;
  * cb : 回调;
  * data : 自定义数据.
@@ -43,12 +43,24 @@ typedef struct ev_base_t{
 	EV_BASE(ev_base_t);
 }ev_base_t;
 
+// active状态
 #define INACTIVE 0
 #define ACTIVE 1
 
-#define NOT_PENDED 0
-#define PENDED 1
+#define ev_activate(ev) do{ \
+	((ev_base_t*)(void*)(ev))->active = ACTIVE; \
+}while(0)
 
+#define ev_inactivate(ev) do{ \
+	((ev_base_t*)(void*)(ev))->active = INACTIVE; \
+}while(0)
+
+// pended状态
+#define ev_pended_reset(ev) do{ \
+	((ev_base_t*)(void*)(ev))->pended = 0; \
+}while(0) 
+
+// priority状态
 #define ev_set_priority(ev, pri) do{ \
 	((ev_base_t*)(void*)(ev))->priority = (pri); \
 }while(0) \
@@ -56,6 +68,7 @@ typedef struct ev_base_t{
 #define ev_priority_higher(ev1, ev2) \
 	(((ev_base_t*)(void*)(ev1))->priority < ((ev_base_t*)(void*)(ev2))->priority) \
 
+// cb状态
 #define ev_set_cb(ev, cb_) do{ \
 	((ev_base_t*)(void*)(ev))->cb = (cb_); \
 }while(0) \
@@ -63,7 +76,7 @@ typedef struct ev_base_t{
 #define ev_init(ev, cb) do{ \
 	((ev_base_t*)(void*)(ev))->name[0] = '\0'; \
 	((ev_base_t*)(void*)(ev))->active = INACTIVE; \
-	((ev_base_t*)(void*)(ev))->pended = NOT_PENDED; \
+	ev_pended_reset((ev)); \
 	ev_set_priority((ev), 0); \
 	ev_set_cb ((ev), cb); \
 }while(0) \
