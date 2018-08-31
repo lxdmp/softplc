@@ -104,31 +104,75 @@ typedef struct ev_list_t{
 /*
  * ev_timer : 定时事件(所有定时都为oneshot).
  */
+typedef struct ev_duration_t{
+	int32_t seconds;
+	int32_t micro_seconds;
+}ev_duration_t;
+
+#define ev_duration_lt(a, b) \
+	( \
+		((a).seconds<(b).seconds) || \
+		(((a).seconds==(b).seconds) && ((a).micro_seconds<(b).micro_seconds)) \
+	) \
+
+#define ev_duration_eq(a, b) \
+	(((a).seconds==(b).seconds) && ((a).micro_seconds==(b).micro_seconds)) \
+
+#define ev_duration_le(a, b) \
+	(ev_duration_lt(a, b) || ev_duration_eq(a, b)) \
+
+#define MICRO_SECONDS_ONE_SECOND 1000000
+
+#define ev_duration_add(a, b) do{ \
+	a.seconds += b.seconds; \
+	a.micro_seconds += b.micro_seconds; \
+	if(a.micro_seconds>MICRO_SECONDS_ONE_SECOND){ \
+		a.seconds += 1; \
+		a.micro_seconds %= MICRO_SECONDS_ONE_SECOND; \
+	} \
+}while(0) \
+
+#define ev_duration_sub(a, b) do{ \
+	a.seconds -= b.seconds; \
+	a.micro_seconds -= b.micro_seconds; \
+	if(a.micro_seconds<0){ \
+		a.seconds -= 1; \
+		a.micro_seconds += MICRO_SECONDS_ONE_SECOND; \
+	} \
+}while(0) \
+
 typedef struct ev_timer_t{
 	EV_LIST(ev_timer_t)
-	int32_t interval; // interval to shot, in microsecond
+	ev_duration_t interval; 
 }ev_timer_t;
 
 #define ev_timer_init(ev, cb) do{ \
 	ev_list_init(ev, cb); \
-	((ev_timer_t*)(void*)(ev))->interval = 0; \
+	((ev_timer_t*)(void*)(ev))->interval.seconds = 0; \
+	((ev_timer_t*)(void*)(ev))->interval.micro_seconds = 0; \
 }while(0) \
 
-void ev_timer_start(ev_loop_t *ev_loop, ev_timer_t *timer, int micro_seconds);
+void ev_timer_start(ev_loop_t *ev_loop, ev_timer_t *timer, ev_duration_t *interval);
 void ev_timer_stop(ev_loop_t *ev_loop, ev_timer_t *timer);
 
 /*
  * ev_io : io事件.
  */
 typedef struct ev_io_t{
-	EV_BASE(ev_io_t);
+	EV_LIST(ev_io_t);
 	int fd;
-	int interested_events;
+	int events_focused;
 }ev_io_t;
 
-#define IO_READ 0x01
-#define IO_WRITE 0x02
-
+/*
+ * 各类事件掩码
+ */
+enum ev_mask_t{
+	EV_NONE = 0x00, 
+	EV_READABLE = 0x01, // 可读
+	EV_WRITABLE = 0x02, // 可写
+	EV_TIMEOUT = 0x04 // 超时
+};
 
 #endif
 

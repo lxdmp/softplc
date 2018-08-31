@@ -1,3 +1,4 @@
+#include <string.h>
 #include "ev.h"
 
 /*
@@ -11,12 +12,11 @@ void ev_loop_init(ev_loop_t *ev)
 /*
  * ev_timer
  */
-void ev_timer_start(ev_loop_t *ev_loop, ev_timer_t *timer, int micro_seconds)
+void ev_timer_start(ev_loop_t *ev_loop, ev_timer_t *timer, ev_duration_t *interval)
 {
 #define INSERT_TIMER(timer, after_this, before_this) do{ \
 	if(before_this) \
-		(before_this)->interval -= (timer)->interval; \
-	\
+		ev_duration_sub((before_this)->interval, (timer)->interval); \
 	if(after_this) \
 		(after_this)->next_ev = timer; \
 	(timer)->next_ev = (before_this); \
@@ -32,7 +32,7 @@ void ev_timer_start(ev_loop_t *ev_loop, ev_timer_t *timer, int micro_seconds)
 	// not-active
 	ev_activate(timer);
 
-	timer->interval = micro_seconds;
+	memcpy(&timer->interval, interval, sizeof(ev_duration_t));
 	if(!ev_loop->timer_tbl){
 		ev_loop->timer_tbl = timer;
 		return;
@@ -41,13 +41,14 @@ void ev_timer_start(ev_loop_t *ev_loop, ev_timer_t *timer, int micro_seconds)
 	ev_timer_t *after_this = NULL;
 	ev_timer_t *before_this = ev_loop->timer_tbl;
 	do{
-		if( (timer->interval<before_this->interval) ||
-			(timer->interval==before_this->interval && ev_priority_higher(timer, before_this)) )
+		
+		if( (ev_duration_lt(timer->interval, before_this->interval)) ||
+			(ev_duration_eq(timer->interval, before_this->interval) && ev_priority_higher(timer, before_this)))
 		{
 			INSERT_TIMER(timer, after_this, before_this);
 			break;
 		}
-		timer->interval -= before_this->interval;
+		ev_duration_sub(timer->interval, before_this->interval);
 		after_this = before_this;
 		before_this = before_this->next_ev;
 	}while(before_this);
@@ -72,7 +73,7 @@ void ev_timer_stop(ev_loop_t *ev_loop, ev_timer_t *timer)
 	{
 		// not-pended
 		if(timer->next_ev){
-			timer->next_ev->interval += timer->interval;
+			ev_duration_add(timer->next_ev->interval, timer->interval);
 			timer->next_ev->prev_ev = timer->prev_ev;
 		}
 		if(timer->prev_ev){
@@ -94,8 +95,9 @@ void ev_timer_stop(ev_loop_t *ev_loop, ev_timer_t *timer)
 #include <stdio.h>
 static void show_timer(ev_timer_t *timer)
 {
-	fprintf(stdout, "%s : priority %d and with interval %d us, prev %s and next %s\n", 
-		timer->name, timer->priority, timer->interval, 
+	fprintf(stdout, "%s : priority %d and with interval %d s, %d us, prev %s and next %s\n", 
+		timer->name, timer->priority, 
+		timer->interval.seconds, timer->interval.micro_seconds, 
 		(timer->prev_ev?timer->prev_ev->name:"NULL"), 
 		(timer->next_ev?timer->next_ev->name:"NULL")
 	);
@@ -142,7 +144,9 @@ static void test_timer()
 				timer->name, timer->priority, delay
 			);
 	
-			ev_timer_start(&ev_loop, timer, delay);
+			ev_duration_t d;
+			d.seconds = 0; d.micro_seconds = delay;
+			ev_timer_start(&ev_loop, timer, &d);
 			show_timers(ev_loop.timer_tbl);
 	
 			getchar();
