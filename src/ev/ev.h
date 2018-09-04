@@ -8,19 +8,36 @@
 typedef char int8_t;
 typedef int int32_t;
 
+typedef int fd_type_t;
 
 
 
+struct ev_list_t;
 struct ev_timer_t;
+struct ev_duration_t;
+
+#define MAX_FD_NUMS 32 // 该事件循环系统可处理的最大fd数目.
 
 /*
  * ev_loop : 事件循环.
  */
+typedef struct ANFD
+{
+	fd_type_t fd; // 文件描述符
+	struct ev_list_t *head; // 相关的io事件
+	int32_t events_focused; // 该描述符关心的事件
+	int32_t refresh; // 该描述符上注册的事件(head上)是否发生变化
+}ANFD;
+
 typedef struct ev_loop_t{
-	struct ev_timer_t *timer_tbl;
+	struct ANFD anfds[MAX_FD_NUMS]; // 该事件循环中的描述符(顺序排列)
+	int32_t anfd_cnt;
+	struct ev_timer_t *timer_tbl; // 定时事件
+	void (*backend_modify)(struct ev_loop_t *ev_loop, fd_type_t fd, int32_t old_events, int32_t new_events);
+	void (*backend_poll)(struct ev_loop_t *ev_loop, struct ev_duration_t *timeout);
 }ev_loop_t;
 
-void ev_loop_init(ev_loop_t *ev);
+void ev_loop_init(ev_loop_t *ev_loop);
 
 /*
  * ev_base : 基本事件.
@@ -160,9 +177,29 @@ void ev_timer_stop(ev_loop_t *ev_loop, ev_timer_t *timer);
  */
 typedef struct ev_io_t{
 	EV_LIST(ev_io_t);
-	int fd;
-	int events_focused;
+	fd_type_t fd;
+	int32_t events_focused;
 }ev_io_t;
+
+/*
+ * ev_prepare : prepare事件(一次事件循环阻塞前)
+ */
+#define EV_PREPARE(ev_type_t) \
+	EV_BASE(ev_type_t) \
+
+typedef struct ev_prepare_t{
+	EV_PREPARE(ev_prepare_t);
+}ev_prepare_t;
+
+/*
+ * ev_check : check事件(一次时间循环阻塞后)
+ */
+#define EV_CHECK(ev_type_t) \
+	EV_BASE(ev_type_t) \
+
+typedef struct ev_check_t{
+	EV_CHECK(ev_check_t);
+}ev_check_t;
 
 /*
  * 各类事件掩码
@@ -171,7 +208,7 @@ enum ev_mask_t{
 	EV_NONE = 0x00, 
 	EV_READABLE = 0x01, // 可读
 	EV_WRITABLE = 0x02, // 可写
-	EV_TIMEOUT = 0x04 // 超时
+	EV_TIMEOUT = 0x04 // 定时
 };
 
 #endif

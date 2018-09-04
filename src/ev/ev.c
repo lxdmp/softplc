@@ -4,9 +4,33 @@
 /*
  * event_loop
  */
-void ev_loop_init(ev_loop_t *ev)
+void ev_loop_init(ev_loop_t *ev_loop)
 {
-	ev->timer_tbl = NULL;
+	ev_loop->anfd_cnt = 0;
+	ev_loop->timer_tbl = NULL;
+	ev_loop->backend_modify = NULL;
+	ev_loop->backend_poll = NULL;
+}
+
+static void fd_update(ev_loop_t *ev_loop)
+{
+	int32_t i;
+	for(i = 0; i<ev_loop->anfd_cnt; ++i)
+	{
+		ANFD *anfd = &(ev_loop->anfds[i]);
+		ev_io_t *ev_io = NULL;
+		if(anfd->refresh)
+		{
+			anfd->refresh = 0;
+			// 该fd关注的事件前后是否发生了变化
+			int32_t old_events_focused = anfd->events_focused;
+			anfd->events_focused = EV_NONE;
+			for(ev_io=(ev_io_t*)anfd->head; ev_io; ev_io = ev_io->next_ev)
+				anfd->events_focused |= ev_io->events_focused;
+			if(old_events_focused != anfd->events_focused)
+				ev_loop->backend_modify(ev_loop, anfd->fd, old_events_focused, anfd->events_focused);
+		}
+    }
 }
 
 /*
@@ -178,4 +202,17 @@ int main()
 	return 0;
 }
 #endif
+
+/*
+ * ev_io
+ */
+
+/*
+ * ev_prepare
+ */
+
+// 就绪事件的默认回调
+static void dummy_pending_ev_cb(ev_loop_t *ev_loop, ev_prepare_t *ev, int events)
+{
+}
 
