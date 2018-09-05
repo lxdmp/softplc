@@ -1,6 +1,8 @@
 #include <string.h>
 #include "ev.h"
 
+extern void installBackendImpl(ev_loop_t *ev_loop);
+
 /*************
  * event_loop
  *************/
@@ -8,8 +10,7 @@ void ev_loop_init(ev_loop_t *ev_loop)
 {
 	ev_loop->anfd_cnt = 0;
 	ev_loop->timer_tbl = NULL;
-	ev_loop->backend_modify = NULL;
-	ev_loop->backend_poll = NULL;
+	installBackendImpl(ev_loop);
 }
 
 static void fd_update(ev_loop_t *ev_loop)
@@ -31,6 +32,25 @@ static void fd_update(ev_loop_t *ev_loop)
 				ev_loop->backend_modify(ev_loop, anfd->fd, old_events_focused, anfd->events_focused);
 		}
     }
+}
+
+void ev_loop_run(ev_loop_t *ev_loop)
+{
+	// 更新ev_io的状态
+	fd_update(ev_loop);
+
+	// 获取下次要阻塞的时间
+	ev_duration_t *block_duration_ptr = NULL, block_duration;
+	if(ev_loop->timer_tbl)
+	{
+		memcpy(&block_duration, &ev_loop->timer_tbl->interval, sizeof(ev_duration_t));
+		block_duration_ptr = &block_duration;
+	}
+
+	// 阻塞等待事件发生
+	ev_loop->backend_poll(ev_loop, block_duration_ptr);
+	
+	// ...
 }
 
 /***********
@@ -212,7 +232,7 @@ void ev_io_start(ev_loop_t *ev_loop, ev_io_t *ev_io)
 	if(ev_io->active==ACTIVE)
 		return;
 
-	// not-active
+	// not active yet
 	ev_activate(ev_io);
 
 	// 更新到ev_loop_t的anfds中,anfds按照fd的升序排列.

@@ -1,29 +1,7 @@
 #ifndef _EV_H_
 #define _EV_H_
 
-#include <stdio.h> // printf
-#include <stdlib.h> // exit
-
-#ifndef NULL
-#define NULL 0
-#endif
-
-//typedef char int8_t;
-//typedef int int32_t;
-
-typedef int fd_type_t;
-
-
-#define MAX_FD_NUMS 32 // 该事件循环系统可处理的最大fd数目.
-
-#define FATAL_ERROR(...) \
-do{ \
-	fprintf(stderr, __VA_ARGS__); \
-	exit(-1); \
-}while(0) \
-
-
-
+#include "../platform.h"
 
 struct ev_io_t;
 struct ev_timer_t;
@@ -49,6 +27,7 @@ typedef struct ev_loop_t{
 }ev_loop_t;
 
 void ev_loop_init(ev_loop_t *ev_loop);
+void ev_loop_run(ev_loop_t *ev_loop);
 
 /*
  * ev_base : 基本事件.
