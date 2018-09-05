@@ -15,7 +15,7 @@ static void backend_select_poll(struct ev_loop_t *ev_loop, struct ev_duration_t 
 {
 }
 
-void installBackendImpl(ev_loop_t *ev_loop)
+void install_backend_impl(ev_loop_t *ev_loop)
 {
 	ev_loop->backend_modify = backend_select_modify;
 	ev_loop->backend_poll = backend_select_poll;

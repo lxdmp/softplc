@@ -3,6 +3,7 @@
 
 #include <stdio.h> // printf
 #include <stdlib.h> // exit
+#include <string.h> // memcpy/memmove
 
 #ifndef NULL
 #define NULL 0

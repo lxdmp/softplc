@@ -1,7 +1,5 @@
-#include <string.h>
 #include "ev.h"
-
-extern void installBackendImpl(ev_loop_t *ev_loop);
+#include "port.h"
 
 /*************
  * event_loop
@@ -10,7 +8,7 @@ void ev_loop_init(ev_loop_t *ev_loop)
 {
 	ev_loop->anfd_cnt = 0;
 	ev_loop->timer_tbl = NULL;
-	installBackendImpl(ev_loop);
+	install_backend_impl(ev_loop);
 }
 
 static void fd_update(ev_loop_t *ev_loop)
@@ -39,7 +37,7 @@ void ev_loop_run(ev_loop_t *ev_loop)
 	// 更新ev_io的状态
 	fd_update(ev_loop);
 
-	// 获取下次要阻塞的时间
+	// 获取下次要等待的时间
 	ev_duration_t *block_duration_ptr = NULL, block_duration;
 	if(ev_loop->timer_tbl)
 	{
@@ -47,8 +45,11 @@ void ev_loop_run(ev_loop_t *ev_loop)
 		block_duration_ptr = &block_duration;
 	}
 
-	// 阻塞等待事件发生
+	// 等待事件发生
+	ev_duration_t entry_block,leave_block;
+	get_boot_duration(&entry_block);
 	ev_loop->backend_poll(ev_loop, block_duration_ptr);
+	get_boot_duration(&leave_block);
 	
 	// ...
 }
