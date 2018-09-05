@@ -1,9 +1,9 @@
 #include <string.h>
 #include "ev.h"
 
-/*
+/*************
  * event_loop
- */
+ *************/
 void ev_loop_init(ev_loop_t *ev_loop)
 {
 	ev_loop->anfd_cnt = 0;
@@ -19,7 +19,7 @@ static void fd_update(ev_loop_t *ev_loop)
 	{
 		ANFD *anfd = &(ev_loop->anfds[i]);
 		ev_io_t *ev_io = NULL;
-		if(anfd->refresh)
+		if(anfd->refresh) // 该anfd关联的ev_io发生了更新.
 		{
 			anfd->refresh = 0;
 			// 该fd关注的事件前后是否发生了变化
@@ -33,9 +33,9 @@ static void fd_update(ev_loop_t *ev_loop)
     }
 }
 
-/*
+/***********
  * ev_timer
- */
+ ***********/
 void ev_timer_start(ev_loop_t *ev_loop, ev_timer_t *timer, ev_duration_t *interval)
 {
 #define INSERT_TIMER(timer, after_this, before_this) do{ \
@@ -203,13 +203,107 @@ int main()
 }
 #endif
 
-/*
+/********
  * ev_io
- */
+ ********/
+void ev_io_start(ev_loop_t *ev_loop, ev_io_t *ev_io)
+{
+	// already active
+	if(ev_io->active==ACTIVE)
+		return;
 
-/*
+	// not-active
+	ev_activate(ev_io);
+
+	// 更新到ev_loop_t的anfds中,anfds按照fd的升序排列.
+	ANFD *current = NULL;
+	int32_t lower = 0, upper = ev_loop->anfd_cnt, index;
+	
+	while(lower<upper) // [lower, upper)
+	{
+		index = (lower+upper)>>1;
+		current = &(ev_loop->anfds[index]);
+
+		if(current->fd<ev_io->fd)
+			lower = index+1;
+		else if(current->fd>ev_io->fd)
+			upper = index;
+		else
+			break;
+	}
+
+	if(current && current->fd==ev_io->fd)
+	{
+		current->refresh = 1;
+		ev_io->next_ev = current->head; // 头部插入
+		ev_io->prev_ev = NULL;
+		if(current->head)
+			current->head->prev_ev = ev_io;
+		current->head = ev_io;
+	}else{
+		// 插入到lower位置
+		if(ev_loop->anfd_cnt>=MAX_FD_NUMS)
+			FATAL_ERROR("exceed fd num limit which is %d.\n", MAX_FD_NUMS);
+		memmove(&(ev_loop->anfds[lower+1]), &(ev_loop->anfds[lower]), sizeof(ANFD)*(ev_loop->anfd_cnt-lower));
+		++ev_loop->anfd_cnt;
+		current = &(ev_loop->anfds[lower]);
+		current->fd = ev_io->fd;
+		current->refresh = 1;
+		current->head = ev_io;
+	}
+}
+
+void ev_io_stop(ev_loop_t *ev_loop, ev_io_t *ev_io)
+{
+	// inactive
+	if(ev_io->active==INACTIVE)
+		return;
+
+	// active
+	if(ev_io->pended)
+	{
+		// pended
+		// TODO pended contains index of ev in pended-ev-buf.
+		ev_pended_reset(ev_io);
+	}
+
+	// 更新所在的anfd.
+	ANFD *current = NULL;
+	int32_t lower = 0, upper = ev_loop->anfd_cnt, index;
+	while(lower<upper) // [lower, upper)
+	{
+		index = (lower+upper)>>1;
+		current = &(ev_loop->anfds[index]);
+
+		if(current->fd<ev_io->fd)
+			lower = index+1;
+		else if(current->fd>ev_io->fd)
+			upper = index;
+		else
+			break;
+	}
+
+	if(current && current->fd==ev_io->fd)
+		current->refresh = 1;
+	else
+		FATAL_ERROR("internal logic error, ev_io active but not in anfds.\n");
+
+	// 从双链表中移除
+	if(ev_io->next_ev)
+		ev_io->next_ev->prev_ev = ev_io->prev_ev;
+	if(ev_io->prev_ev)
+		ev_io->prev_ev->next_ev = ev_io->next_ev;
+	else
+		current->head = ev_io->next_ev;
+	ev_io->prev_ev = NULL;
+	ev_io->next_ev = NULL;
+
+	ev_inactivate(ev_io);
+}
+
+/*************
  * ev_prepare
- */
+ *************/
 
 // 就绪事件的默认回调
 static void dummy_pending_ev_cb(ev_loop_t *ev_loop, ev_prepare_t *ev, int events)

@@ -1,22 +1,33 @@
-#ifndef _TIMER_H_
-#define _TIMER_H_
+#ifndef _EV_H_
+#define _EV_H_
+
+#include <stdio.h> // printf
+#include <stdlib.h> // exit
 
 #ifndef NULL
 #define NULL 0
 #endif
 
-typedef char int8_t;
-typedef int int32_t;
+//typedef char int8_t;
+//typedef int int32_t;
 
 typedef int fd_type_t;
 
 
+#define MAX_FD_NUMS 32 // 该事件循环系统可处理的最大fd数目.
 
-struct ev_list_t;
+#define FATAL_ERROR(...) \
+do{ \
+	fprintf(stderr, __VA_ARGS__); \
+	exit(-1); \
+}while(0) \
+
+
+
+
+struct ev_io_t;
 struct ev_timer_t;
 struct ev_duration_t;
-
-#define MAX_FD_NUMS 32 // 该事件循环系统可处理的最大fd数目.
 
 /*
  * ev_loop : 事件循环.
@@ -24,7 +35,7 @@ struct ev_duration_t;
 typedef struct ANFD
 {
 	fd_type_t fd; // 文件描述符
-	struct ev_list_t *head; // 相关的io事件
+	struct ev_io_t *head; // 相关的io事件
 	int32_t events_focused; // 该描述符关心的事件
 	int32_t refresh; // 该描述符上注册的事件(head上)是否发生变化
 }ANFD;
@@ -180,6 +191,19 @@ typedef struct ev_io_t{
 	fd_type_t fd;
 	int32_t events_focused;
 }ev_io_t;
+
+#define ev_io_set(ev, fd_, events_focused_) do{  \
+	(ev)->fd = (fd_); \
+	(ev)->events_focused = (events_focused_); \
+}while(0) \
+
+#define ev_io_init(ev, cb, fd, events_focused) do{ \
+	ev_init((ev), (cb)); \
+	ev_io_set((ev), (fd), (events_focused)); \
+}while(0) \
+
+void ev_io_start(ev_loop_t *ev_loop, ev_io_t *ev_io);
+void ev_io_stop(ev_loop_t *ev_loop, ev_io_t *ev_io);
 
 /*
  * ev_prepare : prepare事件(一次事件循环阻塞前)
