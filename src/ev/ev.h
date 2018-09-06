@@ -3,37 +3,24 @@
 
 #include "../platform.h"
 
-struct ev_io_t;
-struct ev_timer_t;
-struct ev_duration_t;
+struct ev_loop_t;
 
 /*
- * ev_loop : 事件循环.
+ * 各类事件掩码
  */
-typedef struct ANFD
-{
-	fd_type_t fd; // 文件描述符
-	struct ev_io_t *head; // 相关的io事件
-	int32_t events_focused; // 该描述符关心的事件
-	int32_t refresh; // 该描述符上注册的事件(head上)是否发生变化
-}ANFD;
-
-typedef struct ev_loop_t{
-	struct ANFD anfds[MAX_FD_NUMS]; // 该事件循环中的描述符(顺序排列)
-	int32_t anfd_cnt;
-	struct ev_timer_t *timer_tbl; // 定时事件
-	void (*backend_modify)(struct ev_loop_t *ev_loop, fd_type_t fd, int32_t old_events, int32_t new_events);
-	void (*backend_poll)(struct ev_loop_t *ev_loop, struct ev_duration_t *timeout);
-}ev_loop_t;
-
-void ev_loop_init(ev_loop_t *ev_loop);
-void ev_loop_run(ev_loop_t *ev_loop);
+enum ev_mask_t{
+	EV_NONE = 0x00, 
+	EV_READABLE = 0x01, // 可读
+	EV_WRITABLE = 0x02, // 可写
+	EV_RW = 0x03, // 可读写
+	EV_TIMEOUT = 0x04 // 定时
+};
 
 /*
  * ev_base : 基本事件.
  *
  * active : 事件是否使能;
- * pended : 事件是否就绪;
+ * pending : 事件是否就绪;
  * priority : 事件优先级;
  * cb : 回调;
  * data : 自定义数据.
@@ -41,9 +28,9 @@ void ev_loop_run(ev_loop_t *ev_loop);
 #define EV_BASE(ev_type_t) \
 	int8_t name[32]; \
 	int32_t active; \
-	int32_t pended; \
+	int32_t pending; \
 	int32_t priority; \
-	void (*cb)(ev_loop_t *ev_loop, struct ev_type_t *ev, int revents); \
+	void (*cb)(struct ev_loop_t *ev_loop, struct ev_type_t *ev, int revents); \
 	void *data; \
 
 typedef struct ev_base_t{
@@ -51,29 +38,66 @@ typedef struct ev_base_t{
 }ev_base_t;
 
 // active状态
-#define INACTIVE 0
-#define ACTIVE 1
+#define EV_INACTIVE 0
+#define EV_ACTIVE 1
+
+#define ev_is_active(ev) \
+	(((ev_base_t*)(void*)(ev))->active==EV_ACTIVE)
+
+#define ev_is_inactive(ev) (!ev_is_active(ev))
 
 #define ev_activate(ev) do{ \
-	((ev_base_t*)(void*)(ev))->active = ACTIVE; \
+	((ev_base_t*)(void*)(ev))->active = EV_ACTIVE; \
 }while(0)
 
 #define ev_inactivate(ev) do{ \
-	((ev_base_t*)(void*)(ev))->active = INACTIVE; \
+	((ev_base_t*)(void*)(ev))->active = EV_INACTIVE; \
 }while(0)
 
-// pended状态
-#define ev_pended_reset(ev) do{ \
-	((ev_base_t*)(void*)(ev))->pended = 0; \
-}while(0) 
+// pending状态
+#define EV_NOT_PENDING 0
+#define EV_PENDING 1
+
+#define ev_is_pending(ev) \
+	(((ev_base_t*)(void*)(ev))->pending==EV_PENDING)
+
+#define ev_is_not_pending(ev) \
+	(((ev_base_t*)(void*)(ev))->pending==EV_NOT_PENDING)
+
+#define ev_pending_set(ev) do{ \
+	((ev_base_t*)(void*)(ev))->pending = EV_PENDING; \
+}while(0)
+
+#define ev_pending_reset(ev) do{ \
+	((ev_base_t*)(void*)(ev))->pending = EV_NOT_PENDING; \
+}while(0)
 
 // priority状态
-#define ev_set_priority(ev, pri) do{ \
-	((ev_base_t*)(void*)(ev))->priority = (pri); \
-}while(0) \
+#define EV_HIGH_PRIORITY -3 
+#define EV_LOW_PRIORITY 3
+#define EV_DEFAULT_PRIORITY 0
+#define EV_PRIORITY_NUM (EV_LOW_PRIORITY-EV_HIGH_PRIORITY+1)
+#define EV_PRIORITY_PENDING_NUM (MAX_FD_NUMS<<1)
 
-#define ev_priority_higher(ev1, ev2) \
+#define ev_priority_higher_than(ev1, ev2) \
 	(((ev_base_t*)(void*)(ev1))->priority < ((ev_base_t*)(void*)(ev2))->priority) \
+
+#define ev_priority_lower_than(ev1, ev2) \
+	(((ev_base_t*)(void*)(ev1))->priority > ((ev_base_t*)(void*)(ev2))->priority) \
+
+#define ev_priority_eq_to(ev1, ev2) \
+	(((ev_base_t*)(void*)(ev1))->priority == ((ev_base_t*)(void*)(ev2))->priority) \
+
+#define ev_set_priority(ev, pri) do{ \
+	if(ev_is_inactive(ev)) \
+	{ \
+		((ev_base_t*)(void*)(ev))->priority = (pri); \
+		if(((ev_base_t*)(void*)(ev))->priority<EV_HIGH_PRIORITY) \
+			((ev_base_t*)(void*)(ev))->priority = EV_HIGH_PRIORITY; \
+		else if(((ev_base_t*)(void*)(ev))->priority>EV_LOW_PRIORITY) \
+			((ev_base_t*)(void*)(ev))->priority= EV_LOW_PRIORITY; \
+	} \
+}while(0) \
 
 // cb状态
 #define ev_set_cb(ev, cb_) do{ \
@@ -82,9 +106,9 @@ typedef struct ev_base_t{
 
 #define ev_init(ev, cb) do{ \
 	((ev_base_t*)(void*)(ev))->name[0] = '\0'; \
-	((ev_base_t*)(void*)(ev))->active = INACTIVE; \
-	ev_pended_reset((ev)); \
-	ev_set_priority((ev), 0); \
+	((ev_base_t*)(void*)(ev))->active = EV_INACTIVE; \
+	ev_pending_reset((ev)); \
+	ev_set_priority((ev), EV_DEFAULT_PRIORITY); \
 	ev_set_cb ((ev), cb); \
 }while(0) \
 
@@ -159,8 +183,8 @@ typedef struct ev_timer_t{
 	((ev_timer_t*)(void*)(ev))->interval.micro_seconds = 0; \
 }while(0) \
 
-void ev_timer_start(ev_loop_t *ev_loop, ev_timer_t *timer, ev_duration_t *interval);
-void ev_timer_stop(ev_loop_t *ev_loop, ev_timer_t *timer);
+void ev_timer_start(struct ev_loop_t *ev_loop, ev_timer_t *timer, ev_duration_t *interval);
+void ev_timer_stop(struct ev_loop_t *ev_loop, ev_timer_t *timer);
 
 /*
  * ev_io : io事件.
@@ -173,7 +197,7 @@ typedef struct ev_io_t{
 
 #define ev_io_set(ev, fd_, events_focused_) do{  \
 	(ev)->fd = (fd_); \
-	(ev)->events_focused = (events_focused_); \
+	(ev)->events_focused = (events_focused_)&EV_RW; \
 }while(0) \
 
 #define ev_io_init(ev, cb, fd, events_focused) do{ \
@@ -181,8 +205,8 @@ typedef struct ev_io_t{
 	ev_io_set((ev), (fd), (events_focused)); \
 }while(0) \
 
-void ev_io_start(ev_loop_t *ev_loop, ev_io_t *ev_io);
-void ev_io_stop(ev_loop_t *ev_loop, ev_io_t *ev_io);
+void ev_io_start(struct ev_loop_t *ev_loop, ev_io_t *ev_io);
+void ev_io_stop(struct ev_loop_t *ev_loop, ev_io_t *ev_io);
 
 /*
  * ev_prepare : prepare事件(一次事件循环阻塞前)
@@ -205,14 +229,34 @@ typedef struct ev_check_t{
 }ev_check_t;
 
 /*
- * 各类事件掩码
+ * ev_loop : 事件循环.
  */
-enum ev_mask_t{
-	EV_NONE = 0x00, 
-	EV_READABLE = 0x01, // 可读
-	EV_WRITABLE = 0x02, // 可写
-	EV_TIMEOUT = 0x04 // 定时
-};
+typedef struct ANFD
+{
+	fd_type_t fd; // 文件描述符
+	struct ev_io_t *head; // 相关的io事件
+	int32_t events_focused; // 该描述符关心的事件
+	int32_t refresh; // 该描述符上注册的事件(head上)是否发生变化
+}ANFD; // io事件维护结构
+
+typedef struct ANPENDING
+{
+	struct ev_base_t *ev; // 相关的事件
+	int32_t event_occur; // 发生的事件
+}ANPENDING; // 已就绪事件维护结构
+
+typedef struct ev_loop_t{
+	struct ANFD anfds[MAX_FD_NUMS]; // io事件(按fd顺序排列)
+	int32_t anfd_cnt;
+	struct ev_timer_t *timer_tbl; // timer事件
+	struct ANPENDING pendings[EV_PRIORITY_NUM][EV_PRIORITY_PENDING_NUM]; // 已就绪的事件
+	int32_t pending_cnt[EV_PRIORITY_NUM];
+	void (*backend_modify)(struct ev_loop_t*, fd_type_t, int32_t, int32_t); // reactor实现
+	void (*backend_poll)(struct ev_loop_t*, struct ev_duration_t*);
+}ev_loop_t;
+
+void ev_loop_init(ev_loop_t *ev_loop);
+void ev_loop_run(ev_loop_t *ev_loop);
 
 #endif
 

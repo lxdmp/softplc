@@ -9,6 +9,10 @@ static void backend_select_modify(
 	int32_t old_events, int32_t new_events
 )
 {
+	if(old_events==new_events)
+		return;
+
+	
 }
 
 static void backend_select_poll(struct ev_loop_t *ev_loop, struct ev_duration_t *timeout)
