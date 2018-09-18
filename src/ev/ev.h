@@ -10,10 +10,10 @@ struct ev_loop_t;
  */
 enum ev_mask_t{
 	EV_NONE = 0x00, 
-	EV_READABLE = 0x01, // 可读
-	EV_WRITABLE = 0x02, // 可写
-	EV_RW = 0x03, // 可读写
-	EV_TIMEOUT = 0x04 // 定时
+	EV_TIMEOUT = 0x01, // 定时
+	EV_READABLE = 0x02, // 可读
+	EV_WRITABLE = 0x04, // 可写
+	EV_RW = 0x06 // 可读写
 };
 
 /*
@@ -30,7 +30,7 @@ enum ev_mask_t{
 	int32_t active; \
 	int32_t pending; \
 	int32_t priority; \
-	void (*cb)(struct ev_loop_t *ev_loop, struct ev_type_t *ev, int revents); \
+	void (*cb)(struct ev_loop_t *ev_loop, struct ev_type_t *ev, int events); \
 	void *data; \
 
 typedef struct ev_base_t{
@@ -55,21 +55,18 @@ typedef struct ev_base_t{
 }while(0)
 
 // pending状态
-#define EV_NOT_PENDING 0
-#define EV_PENDING 1
+#define ev_is_not_pending(ev) \
+	(((ev_base_t*)(void*)(ev))->pending<0)
 
 #define ev_is_pending(ev) \
-	(((ev_base_t*)(void*)(ev))->pending==EV_PENDING)
+	(!ev_is_not_pending(ev))
 
-#define ev_is_not_pending(ev) \
-	(((ev_base_t*)(void*)(ev))->pending==EV_NOT_PENDING)
-
-#define ev_pending_set(ev) do{ \
-	((ev_base_t*)(void*)(ev))->pending = EV_PENDING; \
+#define ev_pending_set(ev, pending_) do{ \
+	((ev_base_t*)(void*)(ev))->pending = (pending_); \
 }while(0)
 
 #define ev_pending_reset(ev) do{ \
-	((ev_base_t*)(void*)(ev))->pending = EV_NOT_PENDING; \
+	((ev_base_t*)(void*)(ev))->pending = -1; \
 }while(0)
 
 // priority状态
@@ -77,7 +74,7 @@ typedef struct ev_base_t{
 #define EV_LOW_PRIORITY 3
 #define EV_DEFAULT_PRIORITY 0
 #define EV_PRIORITY_NUM (EV_LOW_PRIORITY-EV_HIGH_PRIORITY+1)
-#define EV_PRIORITY_PENDING_NUM (MAX_FD_NUMS<<1)
+#define EV_PRIORITY_PENDING_NUM (MAX_FD_NUMS<<1+1)
 
 #define ev_priority_higher_than(ev1, ev2) \
 	(((ev_base_t*)(void*)(ev1))->priority < ((ev_base_t*)(void*)(ev2))->priority) \
@@ -241,7 +238,7 @@ typedef struct ANFD
 
 typedef struct ANPENDING
 {
-	struct ev_base_t *ev; // 相关的事件
+	struct ev_list_t *ev; // 相关的事件
 	int32_t event_occur; // 发生的事件
 }ANPENDING; // 已就绪事件维护结构
 
@@ -249,8 +246,8 @@ typedef struct ev_loop_t{
 	struct ANFD anfds[MAX_FD_NUMS]; // io事件(按fd顺序排列)
 	int32_t anfd_cnt;
 	struct ev_timer_t *timer_tbl; // timer事件
-	struct ANPENDING pendings[EV_PRIORITY_NUM][EV_PRIORITY_PENDING_NUM]; // 已就绪的事件
-	int32_t pending_cnt[EV_PRIORITY_NUM];
+	struct ANPENDING anpendings[EV_PRIORITY_NUM][EV_PRIORITY_PENDING_NUM]; // 已就绪的事件
+	int32_t anpending_cnt[EV_PRIORITY_NUM];
 	void (*backend_modify)(struct ev_loop_t*, fd_type_t, int32_t, int32_t); // reactor实现
 	void (*backend_poll)(struct ev_loop_t*, struct ev_duration_t*);
 }ev_loop_t;
